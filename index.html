@@ -395,8 +395,10 @@ function homeView(m){
   h+='<div class="sec"><h2>সর্বশেষ লেনদেন</h2><button class="link" data-act="tab" data-tab="txn">সব দেখুন</button></div>';
   var last=m.txn.slice(0,5);
   h+=last.length?'<div class="list">'+last.map(function(t){return rowHTML(t,m)}).join('')+'</div>':'<div class="list"><div class="empty">এখনো কোনো এন্ট্রি নেই। নিচের বোতাম থেকে প্রথম এন্ট্রি দিন।</div></div>';
+   h+='<div class="sec"><h2>ব্যাকআপ</h2></div><div class="btns"><button class="btn" data-act="backup">ফাইলে সেভ করুন</button><button class="btn" data-act="restore">ফাইল থেকে ফেরান</button></div><input type="file" id="restore-file" accept=".json,application/json" hidden>';
   h+='<p class="foot">'+(store.mode==='db'?'আপনার এন্ট্রি আপনার অ্যাকাউন্টে সংরক্ষিত হয়, যেকোনো ডিভাইস থেকে দেখা যাবে।':'এন্ট্রি শুধু এই ব্রাউজারে সংরক্ষিত হচ্ছে, অন্য ফোনে দেখা যাবে না।')+' আগের বাকি বিক্রির হিসাবে ধরা হয় না।</p>';
   return h;
+ 
 }
 
 function khList(m){
@@ -674,6 +676,20 @@ document.addEventListener('click',function(e){
     case 'cust-edit':openCustomer(id);break;
     case 'shop-edit':openShop();break;
     case 'demo-start':put('shop',{k:'shop',name:'আমার দোকান'}).then(function(){toast('নিজের খাতা শুরু হয়েছে')},function(){toast('সংরক্ষণ করা যায়নি')});break;
+        case 'backup':
+      var data=JSON.stringify({app:'hisab-khata',v:1,docs:S.docs},null,2);
+      var blob=new Blob([data],{type:'application/json'});
+      var url=URL.createObjectURL(blob);
+      var link=document.createElement('a');
+      link.href=url;
+      link.download='hisab-backup-'+key(new Date())+'.json';
+      document.body.appendChild(link);link.click();link.remove();
+      setTimeout(function(){URL.revokeObjectURL(url)},1000);
+      toast('ব্যাকআপ ফাইল নামানো হয়েছে');
+      break;
+    case 'restore':
+      var fi=$('#restore-file');if(fi)fi.click();
+      break;
     case 'close':closeSheet();break;
     case 'save-entry':saveEntry(a);break;
     case 'save-cust':saveCustomer(a);break;
@@ -706,6 +722,23 @@ document.addEventListener('click',function(e){
   }
 });
 document.addEventListener('change',function(e){
+    if(e.target.id==='restore-file'){
+    var f=e.target.files&&e.target.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var j=JSON.parse(rd.result);
+        if(!j||j.app!=='hisab-khata'||!j.docs)throw new Error('bad');
+        if(!confirm('এই ফাইলের হিসাব খাতায় যোগ হবে। চালিয়ে যাবেন?'))return;
+        var ids=Object.keys(j.docs),p=Promise.resolve();
+        ids.forEach(function(id){p=p.then(function(){return put(id,j.docs[id])})});
+        p.then(function(){S.custId=null;render();toast('হিসাব ফিরে এসেছে')});
+      }catch(err){toast('এটা সঠিক ব্যাকআপ ফাইল নয়')}
+      e.target.value='';
+    };
+    rd.readAsText(f);
+    return;
+  }
   if(e.target.id==='f-cust'){
     $('#newc').hidden=e.target.value!=='__new';
     if(e.target.value==='__new'){var n=$('#f-newname');if(n)n.focus()}
